@@ -8,6 +8,44 @@ log() {
     echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] [backup] $1"
 }
 
+# Send notification to Discord webhook
+# Usage: notify "title" "message" "success|error"
+notify() {
+    local title="$1"
+    local message="$2"
+    local status="${3:-success}"
+
+    # Skip if no webhook configured
+    [ -z "${DISCORD_WEBHOOK_URL:-}" ] && return 0
+
+    local color
+    if [ "$status" = "error" ]; then
+        color=15548997  # Red
+    else
+        color=5763719   # Green
+    fi
+
+    local payload
+    payload=$(jq -n \
+        --arg title "$title" \
+        --arg desc "$message" \
+        --argjson color "$color" \
+        '{
+            embeds: [{
+                title: $title,
+                description: $desc,
+                color: $color,
+                timestamp: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))
+            }]
+        }')
+
+    if ! curl -s --max-time 10 -X POST "$DISCORD_WEBHOOK_URL" \
+        -H "Content-Type: application/json" \
+        -d "$payload" >/dev/null 2>&1; then
+        log "WARNING: Failed to send Discord notification"
+    fi
+}
+
 VAULT_PATH="${VAULT_PATH:-/vault}"
 STATE_DIR="${STATE_DIR:-/app/state}"
 
@@ -46,7 +84,7 @@ Stats: $CHANGES"
 
     if [ -n "${LLM_API_URL:-}" ]; then
         # OpenAI-compatible API (Agentgateway, OpenRouter, etc.)
-        LLM_MODEL="${LLM_MODEL:-anthropic/claude-3.5-haiku}"
+        LLM_MODEL="${LLM_MODEL:-anthropic/claude-haiku-4.5}"
         log "Using OpenAI-compatible API: $LLM_API_URL (model: $LLM_MODEL)"
 
         REQUEST_BODY=$(jq -n \
@@ -66,7 +104,7 @@ Stats: $CHANGES"
         AI_MSG=$(echo "$AI_RESPONSE" | jq -r '.choices[0].message.content // empty' 2>/dev/null)
     else
         # Anthropic native API
-        ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}"
+        ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-haiku-4-5-latest}"
         ANTHROPIC_API_URL="${ANTHROPIC_API_URL:-https://api.anthropic.com/v1/messages}"
         log "Using Anthropic API (model: $ANTHROPIC_MODEL)"
 
@@ -110,6 +148,7 @@ if git commit -m "$COMMIT_MSG"; then
     date +%s > "$STATE_DIR/last_commit"
 else
     log "ERROR: Failed to create commit"
+    notify "Vault Commit Failed" "Git commit failed" "error"
     exit 1
 fi
 
@@ -145,7 +184,9 @@ if restic backup \
         --quiet
 
     log "Backup and prune completed"
+    notify "Vault Backup Complete" "Committed and backed up: $CHANGES" "success"
 else
     log "ERROR: Restic backup failed"
+    notify "Vault Backup Failed" "Restic backup failed after commit" "error"
     exit 1
 fi

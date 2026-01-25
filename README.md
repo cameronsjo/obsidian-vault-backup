@@ -9,6 +9,7 @@ Sidecar container that watches an Obsidian vault for changes, commits to git, an
 - **Cloud backup** - Restic to Azure Blob Storage (or any restic-supported backend)
 - **Health endpoint** - HTTP `/health` endpoint for monitoring
 - **Retention policy** - 7 daily, 4 weekly, 12 monthly snapshots
+- **Notifications** - Discord webhook alerts on backup success/failure
 
 ## Quick Start
 
@@ -27,7 +28,9 @@ services:
       RESTIC_PASSWORD: your-restic-password
       # Optional: AI commit messages
       ANTHROPIC_API_KEY: sk-ant-...
-      ANTHROPIC_MODEL: claude-3-5-haiku-latest
+      ANTHROPIC_MODEL: claude-haiku-4-5-latest
+      # Optional: Discord notifications
+      DISCORD_WEBHOOK_URL: https://discord.com/api/webhooks/...
     volumes:
       - /path/to/vault:/vault  # Must be writable (no :ro)
     ports:
@@ -48,10 +51,11 @@ services:
 | `GIT_USER_NAME` | No | `Obsidian Backup` | Git commit author name |
 | `GIT_USER_EMAIL` | No | `backup@local` | Git commit author email |
 | `ANTHROPIC_API_KEY` | No | - | Anthropic API key for AI commit messages |
-| `ANTHROPIC_MODEL` | No | `claude-sonnet-4-20250514` | Model for commit messages |
+| `ANTHROPIC_MODEL` | No | `claude-haiku-4-5-latest` | Model for commit messages |
 | `LLM_API_URL` | No | - | OpenAI-compatible API URL (alternative to Anthropic) |
 | `LLM_API_KEY` | No | - | API key for OpenAI-compatible endpoint |
-| `LLM_MODEL` | No | `anthropic/claude-3.5-haiku` | Model for OpenAI-compatible API |
+| `LLM_MODEL` | No | `anthropic/claude-haiku-4.5` | Model for OpenAI-compatible API |
+| `DISCORD_WEBHOOK_URL` | No | - | Discord webhook for backup notifications |
 
 ## Health Endpoint
 
