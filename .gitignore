@@ -12,3 +12,6 @@ Thumbs.db
 .env
 .env.local
 test-vault/
+
+# Claude Code local settings
+.claude/settings.local.json

@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ruff check --fix \"$CLAUDE_FILE_PATHS\" && ruff format \"$CLAUDE_FILE_PATHS\"",
+            "matcher": "*.py",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'blocked: do not edit lock files' && exit 1",
+            "matcher": "*.lock"
+          }
+        ]
+      }
+    ]
+  }
+}
