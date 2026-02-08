@@ -1,0 +1,178 @@
+"""Tests for vault_backup.watcher."""
+
+from __future__ import annotations
+
+import time
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+
+from vault_backup.config import Config
+from vault_backup.watcher import DebouncedHandler, VaultWatcher
+
+
+class TestDebouncedHandlerIgnore:
+    def test_ignores_git_directory(self) -> None:
+        handler = DebouncedHandler(
+            debounce_seconds=1,
+            on_changes=MagicMock(),
+            state_dir=Path("/tmp"),
+        )
+        assert handler._should_ignore("/vault/.git/objects/abc") is True
+
+    def test_ignores_obsidian_workspace(self) -> None:
+        handler = DebouncedHandler(
+            debounce_seconds=1,
+            on_changes=MagicMock(),
+            state_dir=Path("/tmp"),
+        )
+        assert handler._should_ignore("/vault/.obsidian/workspace.json") is True
+
+    def test_ignores_trash(self) -> None:
+        handler = DebouncedHandler(
+            debounce_seconds=1,
+            on_changes=MagicMock(),
+            state_dir=Path("/tmp"),
+        )
+        assert handler._should_ignore("/vault/.trash/old-note.md") is True
+
+    def test_allows_normal_files(self) -> None:
+        handler = DebouncedHandler(
+            debounce_seconds=1,
+            on_changes=MagicMock(),
+            state_dir=Path("/tmp"),
+        )
+        assert handler._should_ignore("/vault/notes/daily.md") is False
+
+    def test_false_positive_substring_match(self) -> None:
+        """BUG(59s): Substring matching means 'my-git-notes.md' is ignored."""
+        handler = DebouncedHandler(
+            debounce_seconds=1,
+            on_changes=MagicMock(),
+            state_dir=Path("/tmp"),
+        )
+        # This SHOULD be allowed but the current code incorrectly ignores it
+        # because ".git" is a substring of "my-.git-notes"
+        assert handler._should_ignore("/vault/.gitignore") is True  # False positive!
+
+
+class TestDebouncedHandlerEvents:
+    def test_directory_events_ignored(self, tmp_state_dir: Path) -> None:
+        callback = MagicMock()
+        handler = DebouncedHandler(
+            debounce_seconds=1,
+            on_changes=callback,
+            state_dir=tmp_state_dir,
+        )
+        event = MagicMock()
+        event.is_directory = True
+        handler.on_any_event(event)
+        # No timer should be started for directory events
+        assert handler._timer is None
+
+    def test_schedules_backup_on_file_event(self, tmp_state_dir: Path) -> None:
+        callback = MagicMock()
+        handler = DebouncedHandler(
+            debounce_seconds=60,
+            on_changes=callback,
+            state_dir=tmp_state_dir,
+        )
+        event = MagicMock()
+        event.is_directory = False
+        event.src_path = "/vault/notes/daily.md"
+        event.event_type = "modified"
+        handler.on_any_event(event)
+        assert handler._timer is not None
+        assert handler._pending is True
+        # State files written
+        assert (tmp_state_dir / "last_change").exists()
+        assert (tmp_state_dir / "pending_changes").read_text() == "true"
+        handler.cancel()
+
+    def test_triggers_callback_after_debounce(self, tmp_state_dir: Path) -> None:
+        callback = MagicMock()
+        handler = DebouncedHandler(
+            debounce_seconds=0,  # Immediate trigger
+            on_changes=callback,
+            state_dir=tmp_state_dir,
+        )
+        event = MagicMock()
+        event.is_directory = False
+        event.src_path = "/vault/notes/test.md"
+        event.event_type = "created"
+        handler.on_any_event(event)
+        # Wait for timer to fire
+        time.sleep(0.2)
+        callback.assert_called_once()
+        assert handler._pending is False
+        assert (tmp_state_dir / "pending_changes").read_text() == "false"
+
+    def test_debounce_resets_timer(self, tmp_state_dir: Path) -> None:
+        callback = MagicMock()
+        handler = DebouncedHandler(
+            debounce_seconds=1,
+            on_changes=callback,
+            state_dir=tmp_state_dir,
+        )
+        event = MagicMock()
+        event.is_directory = False
+        event.src_path = "/vault/notes/test.md"
+        event.event_type = "modified"
+
+        # Fire two events quickly - should only trigger once
+        handler.on_any_event(event)
+        first_timer = handler._timer
+        handler.on_any_event(event)
+        second_timer = handler._timer
+
+        assert first_timer is not second_timer
+        handler.cancel()
+
+    def test_cancel_stops_timer(self, tmp_state_dir: Path) -> None:
+        callback = MagicMock()
+        handler = DebouncedHandler(
+            debounce_seconds=60,
+            on_changes=callback,
+            state_dir=tmp_state_dir,
+        )
+        event = MagicMock()
+        event.is_directory = False
+        event.src_path = "/vault/notes/test.md"
+        event.event_type = "modified"
+        handler.on_any_event(event)
+        assert handler._timer is not None
+        handler.cancel()
+        assert handler._timer is None
+
+    def test_callback_exception_logged(self, tmp_state_dir: Path) -> None:
+        callback = MagicMock(side_effect=RuntimeError("boom"))
+        handler = DebouncedHandler(
+            debounce_seconds=0,
+            on_changes=callback,
+            state_dir=tmp_state_dir,
+        )
+        event = MagicMock()
+        event.is_directory = False
+        event.src_path = "/vault/notes/test.md"
+        event.event_type = "modified"
+        handler.on_any_event(event)
+        time.sleep(0.2)
+        callback.assert_called_once()  # Should not propagate exception
+
+
+class TestVaultWatcher:
+    def test_creates_handler_and_observer(self, default_config: Config) -> None:
+        callback = MagicMock()
+        watcher = VaultWatcher(config=default_config, on_changes=callback)
+        assert watcher.handler is not None
+        assert watcher.observer is not None
+        assert watcher.handler.debounce_seconds == default_config.debounce_seconds
+
+    def test_start_and_stop(self, default_config: Config, tmp_vault: Path) -> None:
+        callback = MagicMock()
+        watcher = VaultWatcher(config=default_config, on_changes=callback)
+        watcher.start()
+        assert watcher.observer.is_alive()
+        watcher.stop()
+        assert not watcher.observer.is_alive()
