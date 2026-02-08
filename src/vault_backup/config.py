@@ -79,9 +79,7 @@ class NotifyConfig:
 
     @property
     def enabled(self) -> bool:
-        return bool(
-            self.discord_webhook_url or self.slack_webhook_url or self.generic_webhook_url
-        )
+        return bool(self.discord_webhook_url or self.slack_webhook_url or self.generic_webhook_url)
 
     @classmethod
     def from_env(cls) -> Self:

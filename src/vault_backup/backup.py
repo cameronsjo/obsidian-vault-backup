@@ -32,20 +32,24 @@ def run_cmd(
     cmd: list[str], *, cwd: Path | None = None, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
     """Run a command and return result."""
-    log.debug("Running: %s", " ".join(cmd))
+    log.debug("Running command", extra={"command": " ".join(cmd)})
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check)
 
 
 def has_changes(vault_path: Path) -> bool:
     """Check if there are uncommitted changes in the vault."""
     result = run_cmd(["git", "status", "--porcelain"], cwd=vault_path, check=False)
-    return bool(result.stdout.strip())
+    changed = bool(result.stdout.strip())
+    log.debug("Checked for changes", extra={"has_changes": changed})
+    return changed
 
 
 def get_changed_files(vault_path: Path) -> list[str]:
     """Get list of changed files (staged for commit)."""
     result = run_cmd(["git", "diff", "--cached", "--name-only"], cwd=vault_path, check=False)
-    return [f for f in result.stdout.strip().split("\n") if f]
+    files = [f for f in result.stdout.strip().split("\n") if f]
+    log.debug("Staged files", extra={"file_count": len(files)})
+    return files
 
 
 def get_changes_summary(vault_path: Path) -> str:
@@ -72,13 +76,19 @@ Stats: {stats}"""
             return _call_openai_compatible(config, prompt)
         return _call_anthropic(config, prompt)
     except Exception:
-        log.warning("AI commit message generation failed", exc_info=True)
+        log.warning(
+            "AI commit message generation failed, falling back to timestamp",
+            exc_info=True,
+        )
         return None
 
 
 def _call_anthropic(config: Config, prompt: str) -> str | None:
     """Call Anthropic native API."""
-    log.info("Generating commit message via Anthropic API (model: %s)", config.llm.anthropic_model)
+    log.info(
+        "Requesting AI commit message",
+        extra={"provider": "anthropic", "model": config.llm.anthropic_model},
+    )
 
     payload = {
         "model": config.llm.anthropic_model,
@@ -100,15 +110,20 @@ def _call_anthropic(config: Config, prompt: str) -> str | None:
 
     with urllib.request.urlopen(req, timeout=10) as resp:
         result = json.loads(resp.read().decode())
-        return result.get("content", [{}])[0].get("text")
+        message = result.get("content", [{}])[0].get("text")
+        log.info("AI commit message generated", extra={"provider": "anthropic", "message": message})
+        return message
 
 
 def _call_openai_compatible(config: Config, prompt: str) -> str | None:
     """Call OpenAI-compatible API."""
     log.info(
-        "Generating commit message via OpenAI-compatible API: %s (model: %s)",
-        config.llm.llm_api_url,
-        config.llm.llm_model,
+        "Requesting AI commit message",
+        extra={
+            "provider": "openai-compatible",
+            "api_url": config.llm.llm_api_url,
+            "model": config.llm.llm_model,
+        },
     )
 
     payload = {
@@ -131,7 +146,12 @@ def _call_openai_compatible(config: Config, prompt: str) -> str | None:
 
     with urllib.request.urlopen(req, timeout=10) as resp:
         result = json.loads(resp.read().decode())
-        return result.get("choices", [{}])[0].get("message", {}).get("content")
+        message = result.get("choices", [{}])[0].get("message", {}).get("content")
+        log.info(
+            "AI commit message generated",
+            extra={"provider": "openai-compatible", "message": message},
+        )
+        return message
 
 
 def git_commit(config: Config, vault_path: Path) -> tuple[bool, str]:
@@ -146,29 +166,28 @@ def git_commit(config: Config, vault_path: Path) -> tuple[bool, str]:
         return False, ""
 
     stats = get_changes_summary(vault_path)
+    log.info("Changes staged", extra={"file_count": len(changed_files), "stats": stats})
 
     # Generate commit message
     ai_message = generate_ai_commit_message(config, changed_files, stats)
     if ai_message:
         commit_msg = f"vault: {ai_message}"
-        log.info("AI commit message: %s", ai_message)
     else:
         timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
         commit_msg = f"vault: auto-backup {timestamp}\n\n{stats}"
 
     if config.dry_run:
-        log.info("[DRY RUN] Would commit: %s", commit_msg)
+        log.info("[DRY RUN] Would commit", extra={"message": commit_msg})
         run_cmd(["git", "reset", "HEAD"], cwd=vault_path, check=False)
         return True, stats
 
     # Commit
-    log.info("Creating commit")
     result = run_cmd(["git", "commit", "-m", commit_msg], cwd=vault_path, check=False)
     if result.returncode != 0:
-        log.error("Git commit failed: %s", result.stderr)
+        log.error("Git commit failed", extra={"stderr": result.stderr.strip()})
         return False, stats
 
-    log.info("Commit created successfully")
+    log.info("Commit created", extra={"message": commit_msg.split("\n")[0]})
     return True, stats
 
 
@@ -178,14 +197,13 @@ def restic_backup(config: Config, vault_path: Path) -> bool:
     result = run_cmd(["restic", "snapshots", "--quiet"], check=False)
     if result.returncode != 0:
         log.warning("Restic repository not initialized, skipping backup")
-        log.warning("Run 'restic init' to initialize the repository")
         return False
 
     if config.dry_run:
         log.info("[DRY RUN] Would run restic backup")
         return True
 
-    log.info("Starting restic backup")
+    log.info("Starting restic backup", extra={"vault_path": str(vault_path)})
     result = run_cmd(
         [
             "restic",
@@ -203,20 +221,40 @@ def restic_backup(config: Config, vault_path: Path) -> bool:
     )
 
     if result.returncode != 0:
-        log.error("Restic backup failed: %s", result.stderr)
+        log.error("Restic backup failed", extra={"stderr": result.stderr.strip()})
         return False
 
-    log.info("Restic backup completed successfully")
+    # Parse snapshot ID from restic output
+    snapshot_id = _parse_snapshot_id(result.stdout)
+    log.info("Restic backup completed", extra={"snapshot_id": snapshot_id})
     return True
+
+
+def _parse_snapshot_id(restic_output: str) -> str | None:
+    """Extract snapshot ID from restic backup output."""
+    for line in restic_output.strip().split("\n"):
+        if "snapshot" in line and "saved" in line:
+            parts = line.split()
+            for part in parts:
+                if len(part) == 8 and part.isalnum():
+                    return part
+    return None
 
 
 def restic_prune(config: Config) -> bool:
     """Prune old backups according to retention policy."""
     if config.dry_run:
-        log.info("[DRY RUN] Would prune backups with retention: %s", config.retention)
+        log.info("[DRY RUN] Would prune backups", extra={"retention": str(config.retention)})
         return True
 
-    log.info("Pruning old backups")
+    log.info(
+        "Pruning old backups",
+        extra={
+            "keep_daily": config.retention.daily,
+            "keep_weekly": config.retention.weekly,
+            "keep_monthly": config.retention.monthly,
+        },
+    )
     result = run_cmd(
         [
             "restic",
@@ -233,7 +271,7 @@ def restic_prune(config: Config) -> bool:
     )
 
     if result.returncode != 0:
-        log.warning("Restic prune failed: %s", result.stderr)
+        log.warning("Restic prune failed", extra={"stderr": result.stderr.strip()})
         return False
 
     log.info("Prune completed")
@@ -243,6 +281,7 @@ def restic_prune(config: Config) -> bool:
 def run_backup(config: Config, state_dir: Path) -> BackupResult:
     """Run full backup: git commit + restic backup + prune."""
     vault_path = Path(config.vault_path)
+    log.info("Starting backup run", extra={"vault_path": str(vault_path)})
 
     if not has_changes(vault_path):
         log.info("No changes to backup")
@@ -278,6 +317,13 @@ def run_backup(config: Config, state_dir: Path) -> BackupResult:
     # Prune (non-fatal if it fails)
     restic_prune(config)
 
+    log.info(
+        "Backup run completed",
+        extra={
+            "commit_created": commit_success,
+            "changes_summary": changes_summary,
+        },
+    )
     return BackupResult(
         success=True,
         commit_created=commit_success,

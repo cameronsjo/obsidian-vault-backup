@@ -104,6 +104,7 @@ class HealthState:
             )
             return int(result.stdout.strip())
         except (subprocess.CalledProcessError, ValueError):
+            log.debug("Failed to count commits since timestamp", exc_info=True)
             return 0
 
     @staticmethod
@@ -112,7 +113,10 @@ class HealthState:
         sync_file = vault_path / ".obsidian" / "sync.json"
         try:
             return json.loads(sync_file.read_text())
-        except (FileNotFoundError, json.JSONDecodeError):
+        except FileNotFoundError:
+            return None
+        except json.JSONDecodeError:
+            log.debug("Obsidian sync.json is malformed", extra={"path": str(sync_file)})
             return None
 
 
@@ -179,7 +183,10 @@ class HealthServer:
         self.server = HTTPServer(("0.0.0.0", self.config.health_port), HealthHandler)
         self.thread = threading.Thread(target=self._serve, daemon=True)
         self.thread.start()
-        log.info("Health server started on port %d", self.config.health_port)
+        log.info(
+            "Health server started",
+            extra={"bind": "0.0.0.0", "port": self.config.health_port},
+        )
 
     def _serve(self) -> None:
         """Serve requests forever."""

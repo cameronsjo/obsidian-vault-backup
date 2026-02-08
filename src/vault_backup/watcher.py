@@ -47,10 +47,16 @@ class DebouncedHandler(FileSystemEventHandler):
         self._lock = threading.Lock()
         self._pending = False
 
+        log.debug(
+            "DebouncedHandler initialized",
+            extra={"debounce_seconds": debounce_seconds, "state_dir": str(state_dir)},
+        )
+
     def _should_ignore(self, path: str) -> bool:
         """Check if path should be ignored."""
         for pattern in self.IGNORE_PATTERNS:
             if pattern in path:
+                log.debug("Ignoring path", extra={"path": path, "pattern": pattern})
                 return True
         return False
 
@@ -100,6 +106,7 @@ class DebouncedHandler(FileSystemEventHandler):
         log.info("Debounce period elapsed, triggering backup")
         try:
             self.on_changes()
+            log.info("Backup callback completed")
         except Exception:
             log.exception("Backup callback failed")
 
@@ -109,6 +116,7 @@ class DebouncedHandler(FileSystemEventHandler):
             if self._timer:
                 self._timer.cancel()
                 self._timer = None
+                log.debug("Pending backup timer cancelled")
 
 
 class VaultWatcher:

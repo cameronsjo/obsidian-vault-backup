@@ -174,6 +174,16 @@ class Notifier:
 
         self._notify_level = NotifyLevel
 
+        provider_names = [type(p).__name__ for p in self.providers]
+        log.info(
+            "Notifier initialized",
+            extra={
+                "provider_count": len(self.providers),
+                "providers": provider_names,
+                "level": self.level.value,
+            },
+        )
+
     def send(self, title: str, message: str, *, is_error: bool = False) -> None:
         """Send notification to all configured providers if level permits."""
         if not self.providers:
@@ -181,14 +191,28 @@ class Notifier:
 
         # Check notification level filter
         if self.level == self._notify_level.NONE:
+            log.debug("Notification suppressed by level=none", extra={"title": title})
             return
         if self.level == self._notify_level.ERRORS_ONLY and not is_error:
+            log.debug("Success notification suppressed by level=errors", extra={"title": title})
             return
         if self.level == self._notify_level.SUCCESS_ONLY and is_error:
+            log.debug("Error notification suppressed by level=success", extra={"title": title})
             return
 
         for provider in self.providers:
-            provider.send(title, message, is_error=is_error)
+            provider_name = type(provider).__name__
+            ok = provider.send(title, message, is_error=is_error)
+            if ok:
+                log.info(
+                    "Notification sent",
+                    extra={"provider": provider_name, "title": title, "is_error": is_error},
+                )
+            else:
+                log.warning(
+                    "Notification delivery failed",
+                    extra={"provider": provider_name, "title": title},
+                )
 
     def success(self, title: str, message: str) -> None:
         """Send a success notification."""
