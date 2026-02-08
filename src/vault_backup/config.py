@@ -72,6 +72,8 @@ class NotifyConfig:
 
     level: NotifyLevel = NotifyLevel.ALL
     discord_webhook_url: str | None = None
+    discord_username: str | None = None
+    discord_avatar_url: str | None = None
     slack_webhook_url: str | None = None
     generic_webhook_url: str | None = None
 
@@ -92,6 +94,8 @@ class NotifyConfig:
         return cls(
             level=level,
             discord_webhook_url=os.environ.get("DISCORD_WEBHOOK_URL"),
+            discord_username=os.environ.get("DISCORD_WEBHOOK_USERNAME"),
+            discord_avatar_url=os.environ.get("DISCORD_WEBHOOK_AVATAR_URL"),
             slack_webhook_url=os.environ.get("SLACK_WEBHOOK_URL"),
             generic_webhook_url=os.environ.get("WEBHOOK_URL"),
         )

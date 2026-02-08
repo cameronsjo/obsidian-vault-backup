@@ -25,16 +25,27 @@ class NotificationProvider(ABC):
 
 
 class DiscordWebhook(NotificationProvider):
-    """Discord webhook notifications."""
+    """Discord webhook notifications.
+
+    Supports per-request username and avatar overrides, allowing multiple
+    services to share one webhook while appearing as distinct senders.
+    """
 
     COLOR_SUCCESS = 5763719  # Green (#57F287)
     COLOR_ERROR = 15548997  # Red (#ED4245)
 
-    def __init__(self, webhook_url: str) -> None:
+    def __init__(
+        self,
+        webhook_url: str,
+        username: str | None = None,
+        avatar_url: str | None = None,
+    ) -> None:
         self.webhook_url = webhook_url
+        self.username = username
+        self.avatar_url = avatar_url
 
     def send(self, title: str, message: str, *, is_error: bool = False) -> bool:
-        payload = {
+        payload: dict = {
             "embeds": [
                 {
                     "title": title,
@@ -44,6 +55,10 @@ class DiscordWebhook(NotificationProvider):
                 }
             ]
         }
+        if self.username:
+            payload["username"] = self.username
+        if self.avatar_url:
+            payload["avatar_url"] = self.avatar_url
         return self._post(payload)
 
     def _post(self, payload: dict) -> bool:
@@ -145,7 +160,13 @@ class Notifier:
         self.providers: list[NotificationProvider] = []
 
         if config.discord_webhook_url:
-            self.providers.append(DiscordWebhook(config.discord_webhook_url))
+            self.providers.append(
+                DiscordWebhook(
+                    config.discord_webhook_url,
+                    username=config.discord_username,
+                    avatar_url=config.discord_avatar_url,
+                )
+            )
         if config.slack_webhook_url:
             self.providers.append(SlackWebhook(config.slack_webhook_url))
         if config.generic_webhook_url:
