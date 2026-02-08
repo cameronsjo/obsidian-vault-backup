@@ -45,16 +45,24 @@ class TestDebouncedHandlerIgnore:
         )
         assert handler._should_ignore("/vault/notes/daily.md") is False
 
-    def test_false_positive_substring_match(self) -> None:
-        """BUG(59s): Substring matching means 'my-git-notes.md' is ignored."""
+    def test_no_false_positive_on_gitignore(self) -> None:
+        """Path-segment matching avoids false positives on .gitignore etc."""
         handler = DebouncedHandler(
             debounce_seconds=1,
             on_changes=MagicMock(),
             state_dir=Path("/tmp"),
         )
-        # This SHOULD be allowed but the current code incorrectly ignores it
-        # because ".git" is a substring of "my-.git-notes"
-        assert handler._should_ignore("/vault/.gitignore") is True  # False positive!
+        assert handler._should_ignore("/vault/.gitignore") is False
+        assert handler._should_ignore("/vault/my-git-notes.md") is False
+
+    def test_still_ignores_git_contents(self) -> None:
+        handler = DebouncedHandler(
+            debounce_seconds=1,
+            on_changes=MagicMock(),
+            state_dir=Path("/tmp"),
+        )
+        assert handler._should_ignore("/vault/.git/HEAD") is True
+        assert handler._should_ignore("/vault/.git/objects/abc123") is True
 
 
 class TestDebouncedHandlerEvents:

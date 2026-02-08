@@ -155,6 +155,31 @@ class TestHealthHandler:
         resp = urllib.request.urlopen(f"{health_server}/health/")
         assert resp.status == 200
 
+    def test_ready_endpoint(self, health_server: str) -> None:
+        import urllib.request
+
+        resp = urllib.request.urlopen(f"{health_server}/ready")
+        assert resp.status == 200
+        body = json.loads(resp.read())
+        assert body["ready"] is True
+
+    def test_ready_503_when_not_initialized(self) -> None:
+        import urllib.error
+        import urllib.request
+        import vault_backup.health as health_mod
+
+        health_mod._health_state = None
+        server = HTTPServer(("127.0.0.1", 0), HealthHandler)
+        port = server.server_address[1]
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with pytest.raises(urllib.error.HTTPError) as exc_info:
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/ready")
+            assert exc_info.value.code == 503
+        finally:
+            server.shutdown()
+
     def test_not_found(self, health_server: str) -> None:
         import urllib.error
         import urllib.request

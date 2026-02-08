@@ -263,6 +263,14 @@ def _parse_snapshot_id(restic_output: str) -> str | None:
     return None
 
 
+def _write_state(path: Path, value: str) -> None:
+    """Write a state file, logging errors instead of crashing."""
+    try:
+        path.write_text(value)
+    except OSError:
+        log.warning("Failed to write state file", extra={"path": str(path)}, exc_info=True)
+
+
 def restic_prune(config: Config) -> bool:
     """Prune old backups according to retention policy."""
     if config.dry_run:
@@ -321,7 +329,7 @@ def run_backup(config: Config, state_dir: Path) -> BackupResult:
 
     if commit_success:
         # Update state
-        (state_dir / "last_commit").write_text(str(int(datetime.now(UTC).timestamp())))
+        _write_state(state_dir / "last_commit", str(int(datetime.now(UTC).timestamp())))
 
     # Restic backup
     if not restic_backup(config, vault_path):
@@ -334,7 +342,7 @@ def run_backup(config: Config, state_dir: Path) -> BackupResult:
         )
 
     # Update state
-    (state_dir / "last_backup").write_text(str(int(datetime.now(UTC).timestamp())))
+    _write_state(state_dir / "last_backup", str(int(datetime.now(UTC).timestamp())))
 
     # Prune (non-fatal if it fails)
     restic_prune(config)

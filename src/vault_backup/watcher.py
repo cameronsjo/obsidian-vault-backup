@@ -24,12 +24,12 @@ class DebouncedHandler(FileSystemEventHandler):
     of inactivity (debounce period).
     """
 
-    # Paths to ignore (Obsidian internals, git, etc.)
-    IGNORE_PATTERNS = {
-        ".git",
+    # Path segments to ignore (matched as complete path components)
+    IGNORE_SEGMENTS = {".git", ".trash"}
+    # Exact relative paths to ignore
+    IGNORE_PATHS = {
         ".obsidian/workspace.json",
         ".obsidian/workspace-mobile.json",
-        ".trash",
     }
 
     def __init__(
@@ -53,10 +53,15 @@ class DebouncedHandler(FileSystemEventHandler):
         )
 
     def _should_ignore(self, path: str) -> bool:
-        """Check if path should be ignored."""
-        for pattern in self.IGNORE_PATTERNS:
-            if pattern in path:
-                log.debug("Ignoring path", extra={"path": path, "pattern": pattern})
+        """Check if path should be ignored using path-segment matching."""
+        parts = Path(path).parts
+        for segment in self.IGNORE_SEGMENTS:
+            if segment in parts:
+                log.debug("Ignoring path (segment match)", extra={"path": path, "segment": segment})
+                return True
+        for ignore_path in self.IGNORE_PATHS:
+            if path.endswith(ignore_path):
+                log.debug("Ignoring path (exact match)", extra={"path": path, "pattern": ignore_path})
                 return True
         return False
 
@@ -75,11 +80,13 @@ class DebouncedHandler(FileSystemEventHandler):
         """Schedule a backup after debounce period."""
         with self._lock:
             self._last_event_time = time.time()
+            was_pending = self._pending
             self._pending = True
 
-            # Update state file
-            (self.state_dir / "last_change").write_text(str(int(self._last_event_time)))
-            (self.state_dir / "pending_changes").write_text("true")
+            # Only write state files on first event in a batch (not every event)
+            if not was_pending:
+                (self.state_dir / "last_change").write_text(str(int(self._last_event_time)))
+                (self.state_dir / "pending_changes").write_text("true")
 
             # Cancel existing timer
             if self._timer:

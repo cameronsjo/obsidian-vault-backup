@@ -12,6 +12,7 @@ import pytest
 from vault_backup.backup import (
     BackupResult,
     _parse_snapshot_id,
+    _write_state,
     generate_ai_commit_message,
     get_changed_files,
     get_changes_summary,
@@ -96,6 +97,18 @@ Added to the repository: 12.345 MiB (6.789 MiB stored)
 processed 245 files, 23.456 MiB in 0:02
 snapshot ef56gh78 saved"""
         assert _parse_snapshot_id(output) == "ef56gh78"
+
+
+class TestWriteState:
+    def test_writes_file(self, tmp_path: Path) -> None:
+        path = tmp_path / "state"
+        _write_state(path, "12345")
+        assert path.read_text() == "12345"
+
+    def test_handles_permission_error(self, tmp_path: Path) -> None:
+        path = tmp_path / "nonexistent_dir" / "state"
+        # Should not raise - logs warning instead
+        _write_state(path, "12345")
 
 
 class TestGenerateAiCommitMessage:

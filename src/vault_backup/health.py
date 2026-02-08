@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 
 # Global reference to current health state (updated by main loop)
 _health_state: HealthState | None = None
+_health_state_lock = threading.Lock()
 
 
 @dataclass
@@ -131,17 +132,35 @@ class HealthHandler(BaseHTTPRequestHandler):
         """Handle GET requests."""
         if self.path in ("/health", "/health/"):
             self._send_health()
+        elif self.path in ("/ready", "/ready/"):
+            self._send_ready()
         else:
             self._send_not_found()
 
     def _send_health(self) -> None:
         """Send health status response."""
-        global _health_state
-        if _health_state is None:
+        with _health_state_lock:
+            state = _health_state
+        if state is None:
             self._send_error(500, "Health state not initialized")
             return
 
-        body = json.dumps(_health_state.to_dict(), indent=2).encode()
+        body = json.dumps(state.to_dict(), indent=2).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_ready(self) -> None:
+        """Send readiness probe response. Ready once health state is initialized."""
+        with _health_state_lock:
+            state = _health_state
+        if state is None:
+            self._send_error(503, "Not ready")
+            return
+
+        body = json.dumps({"ready": True}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -178,7 +197,8 @@ class HealthServer:
     def start(self) -> None:
         """Start the health server in a background thread."""
         global _health_state
-        _health_state = HealthState(config=self.config)
+        with _health_state_lock:
+            _health_state = HealthState(config=self.config)
 
         self.server = HTTPServer(("0.0.0.0", self.config.health_port), HealthHandler)
         self.thread = threading.Thread(target=self._serve, daemon=True)
