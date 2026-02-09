@@ -33,76 +33,199 @@ _HTMX_JS = (Path(__file__).parent / "htmx.min.js").read_text()
 # --- CSS ---
 
 _PAGE_CSS = """\
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Iosevka+Web:wght@400;500&display=swap');
 :root {
-    --bg: #1a1b26;
-    --surface: #24283b;
-    --text: #a9b1d6;
-    --accent: #7aa2f7;
-    --border: #414868;
-    --success: #9ece6a;
-    --error: #f7768e;
-    --muted: #565f89;
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-raised: #1c2129;
+    --text: #c9d1d9;
+    --text-bright: #e6edf3;
+    --accent: #e0a526;
+    --accent-dim: rgba(224, 165, 38, 0.15);
+    --accent-glow: rgba(224, 165, 38, 0.08);
+    --border: #21262d;
+    --border-accent: #30363d;
+    --success: #56d364;
+    --error: #f85149;
+    --muted: #484f58;
+    --muted-text: #8b949e;
+    --font-mono: 'Iosevka Web', 'JetBrains Mono', 'Fira Code', monospace;
+    --font-sans: 'DM Sans', -apple-system, sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
     background: var(--bg); color: var(--text);
-    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-    padding: 1.5rem; max-width: 1200px; margin: 0 auto;
+    font-family: var(--font-mono);
+    padding: 2rem 2.5rem; max-width: 1200px; margin: 0 auto;
+    min-height: 100vh;
+    background-image: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(255,255,255,0.008) 2px, rgba(255,255,255,0.008) 4px
+    );
 }
-h1 { color: var(--accent); margin-bottom: 1rem; font-size: 1.4rem; }
-h3 { color: var(--accent); margin-bottom: 0.75rem; font-size: 1.1rem; }
+.header {
+    display: flex; align-items: center; gap: 0.75rem;
+    margin-bottom: 1.75rem; padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+.header-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent), 0 0 16px rgba(224, 165, 38, 0.3);
+    animation: pulse 3s ease-in-out infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+h1 {
+    color: var(--text-bright); font-size: 1.1rem;
+    font-family: var(--font-sans); font-weight: 600;
+    letter-spacing: 0.02em;
+}
+h1 span { color: var(--muted-text); font-weight: 400; }
+h3 {
+    color: var(--text-bright); margin-bottom: 0.75rem;
+    font-size: 0.95rem; font-family: var(--font-mono);
+    font-weight: 500;
+}
 .tabs {
-    display: flex; gap: 0.5rem; margin-bottom: 1rem;
-    border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;
+    display: flex; gap: 0; margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    position: relative;
 }
 .tab {
-    background: transparent; color: var(--muted);
-    border: 1px solid transparent; padding: 0.5rem 1rem;
-    cursor: pointer; font-family: inherit; font-size: 0.9rem;
-    border-radius: 4px 4px 0 0;
+    background: transparent; color: var(--muted-text);
+    border: none; padding: 0.65rem 1.25rem;
+    cursor: pointer; font-family: var(--font-sans);
+    font-size: 0.85rem; font-weight: 500;
+    position: relative; transition: color 0.2s;
+    letter-spacing: 0.01em;
 }
-.tab:hover, .tab.active { color: var(--accent); border-color: var(--border); }
-.tab.active { background: var(--surface); border-bottom-color: var(--surface); }
+.tab::after {
+    content: ''; position: absolute;
+    bottom: -1px; left: 0; right: 0; height: 2px;
+    background: transparent; transition: background 0.2s;
+}
+.tab:hover { color: var(--text-bright); }
+.tab.active { color: var(--accent); }
+.tab.active::after { background: var(--accent); }
 table {
-    width: 100%; border-collapse: collapse;
-    background: var(--surface); border-radius: 6px; overflow: hidden;
+    width: 100%; border-collapse: separate;
+    border-spacing: 0 2px;
 }
-th, td {
-    padding: 0.5rem 0.75rem; text-align: left;
-    border-bottom: 1px solid var(--border); font-size: 0.85rem;
+thead th {
+    padding: 0.5rem 1rem; text-align: left;
+    font-size: 0.7rem; font-weight: 500;
+    color: var(--muted-text); text-transform: uppercase;
+    letter-spacing: 0.08em; font-family: var(--font-sans);
+    border: none;
 }
-th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
+tbody td {
+    padding: 0.65rem 1rem; font-size: 0.82rem;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s, border-color 0.15s;
+}
+tbody td:first-child {
+    border-left: 2px solid transparent;
+    border-top-left-radius: 4px; border-bottom-left-radius: 4px;
+}
+tbody td:last-child {
+    border-top-right-radius: 4px; border-bottom-right-radius: 4px;
+}
 tr.clickable { cursor: pointer; }
-tr.clickable:hover { background: rgba(122, 162, 247, 0.1); }
-.empty { color: var(--muted); padding: 2rem; text-align: center; }
+tr.clickable:hover td {
+    background: var(--surface-raised);
+    border-color: var(--border-accent);
+}
+tr.clickable:hover td:first-child {
+    border-left-color: var(--accent);
+}
+.empty {
+    color: var(--muted-text); padding: 3rem 2rem;
+    text-align: center; font-size: 0.85rem;
+    border: 1px dashed var(--border); border-radius: 6px;
+    margin-top: 0.5rem;
+}
 pre {
-    background: var(--surface); padding: 1rem; border-radius: 6px;
-    overflow-x: auto; font-size: 0.85rem; line-height: 1.5;
-    max-height: 500px; overflow-y: auto;
+    background: var(--surface); padding: 1.25rem;
+    border-radius: 6px; border: 1px solid var(--border);
+    overflow-x: auto; font-size: 0.82rem; line-height: 1.65;
+    max-height: 520px; overflow-y: auto;
+    color: var(--text-bright);
+    font-family: var(--font-mono);
 }
-.actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+pre::-webkit-scrollbar { width: 6px; height: 6px; }
+pre::-webkit-scrollbar-track { background: transparent; }
+pre::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 3px; }
+.actions { display: flex; gap: 0.75rem; margin-top: 1rem; }
 .btn {
-    display: inline-block; background: var(--accent); color: var(--bg);
-    border: none; padding: 0.5rem 1rem; border-radius: 4px;
-    cursor: pointer; font-family: inherit; font-size: 0.85rem;
-    font-weight: 600; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent); padding: 0.5rem 1.1rem;
+    border-radius: 4px; cursor: pointer;
+    font-family: var(--font-sans); font-size: 0.8rem;
+    font-weight: 500; text-decoration: none;
+    transition: background 0.15s, color 0.15s;
+    letter-spacing: 0.01em;
 }
-.btn:hover { opacity: 0.9; }
-.btn-danger { background: var(--error); }
-.success { color: var(--success); padding: 1rem; }
-.error { color: var(--error); padding: 1rem; }
+.btn:hover {
+    background: var(--accent); color: var(--bg);
+}
+.btn-danger {
+    color: var(--error); border-color: var(--error);
+}
+.btn-danger:hover {
+    background: var(--error); color: #fff;
+}
+.success {
+    color: var(--success); padding: 1rem 1.25rem;
+    border-left: 3px solid var(--success);
+    background: rgba(86, 211, 100, 0.06);
+    border-radius: 0 4px 4px 0;
+    font-size: 0.85rem;
+}
+.error {
+    color: var(--error); padding: 1rem 1.25rem;
+    border-left: 3px solid var(--error);
+    background: rgba(248, 81, 73, 0.06);
+    border-radius: 0 4px 4px 0;
+    font-size: 0.85rem;
+}
 input[type="text"] {
     background: var(--surface); color: var(--text);
-    border: 1px solid var(--border); padding: 0.5rem 0.75rem;
-    border-radius: 4px; font-family: inherit; font-size: 0.85rem;
-    width: 100%; max-width: 400px; margin-bottom: 0.75rem;
+    border: 1px solid var(--border); padding: 0.55rem 0.9rem;
+    border-radius: 4px; font-family: var(--font-mono);
+    font-size: 0.82rem; width: 100%; max-width: 420px;
+    margin-bottom: 1rem; transition: border-color 0.2s;
 }
 input[type="text"]::placeholder { color: var(--muted); }
-input[type="text"]:focus { outline: none; border-color: var(--accent); }
-#preview { margin-top: 1.5rem; }
-.breadcrumb { color: var(--muted); margin-bottom: 0.75rem; font-size: 0.85rem; }
-.breadcrumb a { color: var(--accent); text-decoration: none; cursor: pointer; }
-.breadcrumb a:hover { text-decoration: underline; }
+input[type="text"]:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+#preview {
+    margin-top: 2rem; padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+#preview:empty { border-top: none; margin-top: 0; padding-top: 0; }
+.breadcrumb {
+    color: var(--muted-text); margin-bottom: 0.75rem;
+    font-size: 0.8rem; font-family: var(--font-sans);
+}
+.breadcrumb a {
+    color: var(--accent); text-decoration: none;
+    cursor: pointer; transition: opacity 0.15s;
+}
+.breadcrumb a:hover { opacity: 0.8; }
+code {
+    font-family: var(--font-mono); font-size: 0.82rem;
+    color: var(--accent); font-weight: 400;
+}
+.htmx-request { opacity: 0.6; transition: opacity 0.2s; }
+.htmx-settling { opacity: 1; transition: opacity 0.15s; }
 """
 
 # --- Tab switching JS (no user content, static only) ---
@@ -165,7 +288,10 @@ def _page_html() -> str:
         f"<script>{_HTMX_JS}</script>"
         f"<script>{_TAB_JS}</script>"
         "</head><body>"
-        "<h1>Vault Backup</h1>"
+        "<div class='header'>"
+        "<div class='header-dot'></div>"
+        "<h1>Vault Backup <span>/ restore</span></h1>"
+        "</div>"
         "<nav class='tabs'>"
         "<button class='tab active' id='tab-git'"
         " hx-get='/ui/log' hx-target='#content'"
@@ -195,7 +321,7 @@ def _render_snapshots(snapshots: list[ResticSnapshot]) -> str:
         rows += (
             f'<tr class="clickable" hx-get="/ui/files?snapshot={sid}" hx-target="#content">'
             f"<td><code>{sid}</code></td><td>{time_str}</td>"
-            f"<td>{paths}</td><td>{tags}</td></tr>"
+            f"<td>{paths}</td><td><code>{tags}</code></td></tr>"
         )
     return (
         "<table><thead><tr>"
@@ -221,17 +347,18 @@ def _render_files(entries: list[ResticEntry], snapshot_id: str) -> str:
         type_str = html.escape(e.type)
         size = _format_size(e.size) if e.type == "file" else "-"
         mtime = html.escape(_format_time(e.mtime))
+        type_label = f'<code>{type_str}</code>'
         if e.type == "file":
             rows += (
                 f'<tr class="clickable" '
                 f'hx-get="/ui/preview?source={sid}&path={html.escape(e.path)}" '
                 f'hx-target="#preview">'
-                f"<td><code>{path}</code></td><td>{type_str}</td>"
+                f"<td><code>{path}</code></td><td>{type_label}</td>"
                 f"<td>{size}</td><td>{mtime}</td></tr>"
             )
         else:
             rows += (
-                f"<tr><td><code>{path}</code></td><td>{type_str}</td>"
+                f"<tr><td><code>{path}/</code></td><td>{type_label}</td>"
                 f"<td>{size}</td><td>{mtime}</td></tr>"
             )
     return (
@@ -287,7 +414,8 @@ def _render_preview(content: str, source: str, path: str) -> str:
         f'<div class="breadcrumb">Source: <code>{esc_source}</code></div>'
         f"<pre>{esc_content}</pre>"
         f'<div class="actions">'
-        f'<a class="btn" href="/ui/download?source={esc_source}&path={esc_path}">Download</a>'
+        f'<a class="btn" href="/ui/download?source={esc_source}&path={esc_path}">'
+        f"Download</a>"
         f'<form style="display:inline" hx-post="/ui/restore" hx-target="#preview"'
         f' hx-confirm="Restore {filename} to its original location in the vault?">'
         f'<input type="hidden" name="source" value="{esc_source}">'
