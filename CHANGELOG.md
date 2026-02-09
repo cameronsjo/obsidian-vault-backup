@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Default AI model updated to Claude Haiku 4.5 (`claude-haiku-4-5-latest`)
+- Default AI model updated to Claude Haiku 4.5 (`claude-haiku-4-5-20251001`)
 - File watching now uses Python watchdog instead of inotify-tools
 - Health server now uses Python stdlib instead of busybox httpd
 - Simplified Dockerfile with multi-stage build

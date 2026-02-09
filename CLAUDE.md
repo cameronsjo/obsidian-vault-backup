@@ -64,7 +64,7 @@ Watchdog (file monitor) -> Debounce (5min) -> Git Commit -> Restic Backup -> Not
 **Optional (AI commits):**
 
 - `ANTHROPIC_API_KEY` - Anthropic API key for Claude commit messages
-- `ANTHROPIC_MODEL` - Model name (default: `claude-haiku-4-5-latest`)
+- `ANTHROPIC_MODEL` - Model name (default: `claude-haiku-4-5-20251001`)
 - `LLM_API_URL` - OpenAI-compatible API URL (alternative to Anthropic)
 - `LLM_API_KEY` - API key for OpenAI-compatible endpoint
 - `LLM_MODEL` - Model name for OpenAI-compatible API

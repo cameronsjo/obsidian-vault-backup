@@ -142,7 +142,7 @@ Uses Claude Haiku 4.5 to generate meaningful commit messages from changed filena
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | - | Anthropic API key |
-| `ANTHROPIC_MODEL` | `claude-haiku-4-5-latest` | Model to use |
+| `ANTHROPIC_MODEL` | `claude-haiku-4-5-20251001` | Model to use |
 
 Or use any OpenAI-compatible API:
 

@@ -56,7 +56,7 @@ class LLMConfig:
     # Anthropic native API
     anthropic_api_key: str | None = None
     anthropic_api_url: str = "https://api.anthropic.com/v1/messages"
-    anthropic_model: str = "claude-haiku-4-5-latest"
+    anthropic_model: str = "claude-haiku-4-5-20251001"
 
     # OpenAI-compatible API (alternative)
     llm_api_url: str | None = None
@@ -74,7 +74,7 @@ class LLMConfig:
             anthropic_api_url=os.environ.get(
                 "ANTHROPIC_API_URL", "https://api.anthropic.com/v1/messages"
             ),
-            anthropic_model=os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-latest"),
+            anthropic_model=os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
             llm_api_url=os.environ.get("LLM_API_URL"),
             llm_api_key=os.environ.get("LLM_API_KEY"),
             llm_model=os.environ.get("LLM_MODEL", "anthropic/claude-haiku-4.5"),

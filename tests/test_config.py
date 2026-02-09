@@ -75,7 +75,7 @@ class TestLLMConfig:
 
     def test_default_models(self) -> None:
         config = LLMConfig()
-        assert config.anthropic_model == "claude-haiku-4-5-latest"
+        assert config.anthropic_model == "claude-haiku-4-5-20251001"
         assert config.llm_model == "anthropic/claude-haiku-4.5"
 
 
