@@ -176,7 +176,7 @@ def _page_html() -> str:
         " onclick='switchTab(this)'"
         ">Snapshots</button>"
         "</nav>"
-        "<div id='content' hx-get='/ui/log' hx-trigger='load' hx-target='this'></div>"
+        "<div id='content' hx-get='/ui/log' hx-trigger='load once' hx-target='this'></div>"
         "<div id='preview'></div>"
         "</body></html>"
     )
