@@ -57,6 +57,26 @@ SAMPLE_FILES = [
     {"path": "/vault/.obsidian/app.json", "type": "file", "size": 245, "mtime": "2026-02-01T12:00:00Z"},
 ]
 
+SAMPLE_DIFF = """\
+diff --git a/Daily Notes/2026-02-09.md b/Daily Notes/2026-02-09.md
+index a1b2c3d..e4f5a6b 100644
+--- a/Daily Notes/2026-02-09.md
++++ b/Daily Notes/2026-02-09.md
+@@ -3,8 +3,10 @@
+ ## Tasks
+ - [x] Review vault backup UI
+-- [ ] Deploy new container image
++- [x] Deploy new container image
+ - [ ] Update homelab documentation
++- [ ] Add diff view to restore UI
++- [ ] Test light/dark mode toggle
+
+ ## Notes
+-Working on the restore/browse web UI.
++Working on the restore/browse web UI for the vault backup sidecar.
++The htmx approach keeps things lightweight.
+"""
+
 SAMPLE_FILE_CONTENT = """\
 # Daily Note - 2026-02-09
 
@@ -130,6 +150,10 @@ def _mock_git_diff_tree(_vault_path: Path, _commit: str) -> list:
     ]
 
 
+def _mock_git_diff_file(_vault_path: Path, _commit: str, _filepath: str) -> str:
+    return SAMPLE_DIFF
+
+
 def _mock_restic_show_file(_snapshot_id: str, _filepath: str) -> str:
     return SAMPLE_FILE_CONTENT
 
@@ -162,6 +186,7 @@ def main() -> None:
         "vault_backup.ui.git_restore_file": _mock_git_restore_file,
         "vault_backup.ui.restic_snapshots": _mock_restic_snapshots,
         "vault_backup.ui.git_log_single": _mock_git_log_single,
+        "vault_backup.ui.git_diff_file": _mock_git_diff_file,
         "vault_backup.ui.git_diff_tree": _mock_git_diff_tree,
         "vault_backup.ui.restic_ls": _mock_restic_ls,
         "vault_backup.ui.restic_show_file": _mock_restic_show_file,

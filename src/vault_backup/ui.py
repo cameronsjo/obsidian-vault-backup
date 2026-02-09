@@ -16,6 +16,7 @@ from vault_backup.restore import (
     ResticEntry,
     ResticSnapshot,
     detect_source,
+    git_diff_file,
     git_diff_tree,
     git_file_history,
     git_log,
@@ -44,17 +45,99 @@ _PAGE_CSS = """\
     --surface-raised: #1c2129;
     --text: #c9d1d9;
     --text-bright: #e6edf3;
-    --accent: #e0a526;
-    --accent-dim: rgba(224, 165, 38, 0.15);
-    --accent-glow: rgba(224, 165, 38, 0.08);
+    --accent: #4493f8;
+    --accent-dim: rgba(68, 147, 248, 0.15);
+    --accent-glow: rgba(68, 147, 248, 0.08);
     --border: #21262d;
     --border-accent: #30363d;
-    --success: #56d364;
+    --success: #3fb950;
     --error: #f85149;
+    --warning: #d29922;
     --muted: #484f58;
     --muted-text: #8b949e;
+    --diff-add-bg: rgba(63, 185, 80, 0.15);
+    --diff-add-text: #3fb950;
+    --diff-del-bg: rgba(248, 81, 73, 0.15);
+    --diff-del-text: #f85149;
+    --diff-hunk-bg: rgba(68, 147, 248, 0.1);
+    --diff-hunk-text: #8b949e;
+    --diff-meta-text: #8b949e;
     --font-mono: 'Iosevka Web', 'JetBrains Mono', 'Fira Code', monospace;
     --font-sans: 'DM Sans', -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+        --bg: #ffffff;
+        --surface: #f6f8fa;
+        --surface-raised: #eef1f5;
+        --text: #1f2328;
+        --text-bright: #0d1117;
+        --accent: #0969da;
+        --accent-dim: rgba(9, 105, 218, 0.1);
+        --accent-glow: rgba(9, 105, 218, 0.06);
+        --border: #d1d9e0;
+        --border-accent: #b1bac4;
+        --success: #1a7f37;
+        --error: #d1242f;
+        --warning: #9a6700;
+        --muted: #b1bac4;
+        --muted-text: #656d76;
+        --diff-add-bg: rgba(26, 127, 55, 0.1);
+        --diff-add-text: #1a7f37;
+        --diff-del-bg: rgba(209, 36, 47, 0.1);
+        --diff-del-text: #d1242f;
+        --diff-hunk-bg: rgba(9, 105, 218, 0.08);
+        --diff-hunk-text: #656d76;
+        --diff-meta-text: #656d76;
+    }
+}
+[data-theme="light"] {
+    --bg: #ffffff;
+    --surface: #f6f8fa;
+    --surface-raised: #eef1f5;
+    --text: #1f2328;
+    --text-bright: #0d1117;
+    --accent: #0969da;
+    --accent-dim: rgba(9, 105, 218, 0.1);
+    --accent-glow: rgba(9, 105, 218, 0.06);
+    --border: #d1d9e0;
+    --border-accent: #b1bac4;
+    --success: #1a7f37;
+    --error: #d1242f;
+    --warning: #9a6700;
+    --muted: #b1bac4;
+    --muted-text: #656d76;
+    --diff-add-bg: rgba(26, 127, 55, 0.1);
+    --diff-add-text: #1a7f37;
+    --diff-del-bg: rgba(209, 36, 47, 0.1);
+    --diff-del-text: #d1242f;
+    --diff-hunk-bg: rgba(9, 105, 218, 0.08);
+    --diff-hunk-text: #656d76;
+    --diff-meta-text: #656d76;
+}
+[data-theme="dark"] {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-raised: #1c2129;
+    --text: #c9d1d9;
+    --text-bright: #e6edf3;
+    --accent: #4493f8;
+    --accent-dim: rgba(68, 147, 248, 0.15);
+    --accent-glow: rgba(68, 147, 248, 0.08);
+    --border: #21262d;
+    --border-accent: #30363d;
+    --success: #3fb950;
+    --error: #f85149;
+    --warning: #d29922;
+    --muted: #484f58;
+    --muted-text: #8b949e;
+    --diff-add-bg: rgba(63, 185, 80, 0.15);
+    --diff-add-text: #3fb950;
+    --diff-del-bg: rgba(248, 81, 73, 0.15);
+    --diff-del-text: #f85149;
+    --diff-hunk-bg: rgba(68, 147, 248, 0.1);
+    --diff-hunk-text: #8b949e;
+    --diff-meta-text: #8b949e;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -62,10 +145,6 @@ body {
     font-family: var(--font-mono);
     padding: 2rem 2.5rem; max-width: 1200px; margin: 0 auto;
     min-height: 100vh;
-    background-image: repeating-linear-gradient(
-        0deg, transparent, transparent 2px,
-        rgba(255,255,255,0.008) 2px, rgba(255,255,255,0.008) 4px
-    );
 }
 .header {
     display: flex; align-items: center; gap: 0.75rem;
@@ -75,7 +154,7 @@ body {
 .header-dot {
     width: 8px; height: 8px; border-radius: 50%;
     background: var(--accent);
-    box-shadow: 0 0 8px var(--accent), 0 0 16px rgba(224, 165, 38, 0.3);
+    box-shadow: 0 0 8px var(--accent), 0 0 16px var(--accent-dim);
     animation: pulse 3s ease-in-out infinite;
 }
 @keyframes pulse {
@@ -228,6 +307,38 @@ code {
     font-family: var(--font-mono); font-size: 0.82rem;
     color: var(--accent); font-weight: 400;
 }
+.status-added { color: var(--success); }
+.status-modified { color: var(--warning); }
+.status-deleted { color: var(--error); }
+.status-renamed { color: var(--accent); }
+.theme-toggle {
+    margin-left: auto; background: transparent;
+    color: var(--muted-text); border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem; border-radius: 4px;
+    cursor: pointer; font-size: 0.9rem; line-height: 1;
+    transition: color 0.15s, border-color 0.15s;
+}
+.theme-toggle:hover { color: var(--text-bright); border-color: var(--border-accent); }
+.diff-view { white-space: pre; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.65; }
+.diff-add { color: var(--diff-add-text); background: var(--diff-add-bg); display: inline-block; width: 100%; }
+.diff-del { color: var(--diff-del-text); background: var(--diff-del-bg); display: inline-block; width: 100%; }
+.diff-hunk { color: var(--diff-hunk-text); background: var(--diff-hunk-bg); display: inline-block; width: 100%; }
+.diff-meta { color: var(--diff-meta-text); }
+.toggle-group {
+    display: flex; gap: 0; margin-bottom: 0.75rem;
+    border: 1px solid var(--border); border-radius: 4px; width: fit-content;
+}
+.toggle-btn {
+    background: transparent; color: var(--muted-text);
+    border: none; padding: 0.4rem 0.9rem;
+    cursor: pointer; font-family: var(--font-sans);
+    font-size: 0.78rem; font-weight: 500;
+    transition: background 0.15s, color 0.15s;
+}
+.toggle-btn:first-child { border-radius: 3px 0 0 3px; }
+.toggle-btn:last-child { border-radius: 0 3px 3px 0; }
+.toggle-btn.active { background: var(--accent-dim); color: var(--accent); }
+.toggle-btn:hover:not(.active) { color: var(--text-bright); }
 .htmx-request { opacity: 0.6; transition: opacity 0.2s; }
 .htmx-settling { opacity: 1; transition: opacity 0.15s; }
 """
@@ -243,6 +354,39 @@ function switchTab(el) {
     var preview = document.getElementById('preview');
     while (preview.firstChild) { preview.removeChild(preview.firstChild); }
 }
+"""
+
+_THEME_JS = """\
+(function() {
+    var saved = localStorage.getItem('theme');
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+})();
+function toggleTheme() {
+    var el = document.documentElement;
+    var current = el.getAttribute('data-theme');
+    var icons = {light: '\\u263E', dark: '\\u2600', '': '\\u25D0'};
+    var next;
+    if (!current) next = 'light';
+    else if (current === 'light') next = 'dark';
+    else next = '';
+    if (next) {
+        el.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+    } else {
+        el.removeAttribute('data-theme');
+        localStorage.removeItem('theme');
+    }
+    var btn = document.querySelector('.theme-toggle');
+    if (btn) btn.textContent = icons[next] || icons[''];
+}
+(function() {
+    var saved = localStorage.getItem('theme');
+    var icons = {light: '\\u263E', dark: '\\u2600', '': '\\u25D0'};
+    document.addEventListener('DOMContentLoaded', function() {
+        var btn = document.querySelector('.theme-toggle');
+        if (btn) btn.textContent = icons[saved || ''];
+    });
+})();
 """
 
 # --- Helpers ---
@@ -283,6 +427,7 @@ def _param(params: dict[str, list[str]], key: str) -> str:
 _restic_ls_cache: dict[str, list[ResticEntry]] = {}
 
 _STATUS_LABELS = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed"}
+_STATUS_CSS = {"A": "status-added", "M": "status-modified", "D": "status-deleted", "R": "status-renamed"}
 
 
 # --- HTML Builders ---
@@ -298,10 +443,13 @@ def _page_html() -> str:
         f"<style>{_PAGE_CSS}</style>"
         f"<script>{_HTMX_JS}</script>"
         f"<script>{_TAB_JS}</script>"
+        f"<script>{_THEME_JS}</script>"
         "</head><body>"
         "<div class='header'>"
         "<div class='header-dot'></div>"
         "<h1>Vault Backup <span>/ restore</span></h1>"
+        "<button class='theme-toggle' onclick='toggleTheme()' "
+        "title='Toggle theme'></button>"
         "</div>"
         "<nav class='tabs'>"
         "<button class='tab active' id='tab-git'"
@@ -488,9 +636,10 @@ def _render_commit_files(commit: GitCommit, changes: list[GitFileChange]) -> str
     for ch in changes:
         path = html.escape(ch.path)
         status = html.escape(_STATUS_LABELS.get(ch.status, ch.status))
+        css_cls = _STATUS_CSS.get(ch.status, "")
         if ch.status == "D":
             rows += (
-                f"<tr><td><code>{status}</code></td>"
+                f'<tr><td><code class="{css_cls}">{status}</code></td>'
                 f"<td><code>{path}</code></td></tr>"
             )
         else:
@@ -498,7 +647,7 @@ def _render_commit_files(commit: GitCommit, changes: list[GitFileChange]) -> str
                 f'<tr class="clickable" '
                 f'hx-get="/ui/preview?source={short}&path={path}" '
                 f'hx-target="#preview">'
-                f"<td><code>{status}</code></td>"
+                f'<td><code class="{css_cls}">{status}</code></td>'
                 f"<td><code>{path}</code></td></tr>"
             )
 
@@ -510,16 +659,81 @@ def _render_commit_files(commit: GitCommit, changes: list[GitFileChange]) -> str
     )
 
 
+def _diff_toggle_buttons(source: str, path: str, active: str = "file") -> str:
+    """Render 'Show file' / 'Show diff' toggle button pair."""
+    esc_source = html.escape(source)
+    esc_path = html.escape(path)
+    file_cls = "toggle-btn active" if active == "file" else "toggle-btn"
+    diff_cls = "toggle-btn active" if active == "diff" else "toggle-btn"
+    return (
+        '<div class="toggle-group">'
+        f'<button class="{file_cls}" '
+        f'hx-get="/ui/preview?source={esc_source}&path={esc_path}" '
+        f'hx-target="#preview">Show file</button>'
+        f'<button class="{diff_cls}" '
+        f'hx-get="/ui/diff?source={esc_source}&path={esc_path}" '
+        f'hx-target="#preview">Show diff</button>'
+        "</div>"
+    )
+
+
+def _render_diff(diff_text: str, source: str, path: str) -> str:
+    """Render a unified diff with syntax-highlighted lines."""
+    esc_source = html.escape(source)
+    esc_path = html.escape(path)
+    toggle = _diff_toggle_buttons(source, path, active="diff")
+
+    if not diff_text.strip():
+        return (
+            f"<h3>{esc_path}</h3>"
+            f'<div class="breadcrumb">Source: <code>{esc_source}</code></div>'
+            + toggle
+            + '<div class="empty">No changes in this file.</div>'
+        )
+
+    lines: list[str] = []
+    for line in diff_text.split("\n"):
+        escaped = html.escape(line)
+        if line.startswith("+++") or line.startswith("---"):
+            lines.append(f'<span class="diff-meta">{escaped}</span>')
+        elif line.startswith("+"):
+            lines.append(f'<span class="diff-add">{escaped}</span>')
+        elif line.startswith("-"):
+            lines.append(f'<span class="diff-del">{escaped}</span>')
+        elif line.startswith("@@"):
+            lines.append(f'<span class="diff-hunk">{escaped}</span>')
+        elif line.startswith("diff ") or line.startswith("index "):
+            lines.append(f'<span class="diff-meta">{escaped}</span>')
+        else:
+            lines.append(escaped)
+
+    diff_html = "\n".join(lines)
+    return (
+        f"<h3>{esc_path}</h3>"
+        f'<div class="breadcrumb">Source: <code>{esc_source}</code></div>'
+        + toggle
+        + f'<pre class="diff-view">{diff_html}</pre>'
+    )
+
+
 def _render_preview(content: str, source: str, path: str) -> str:
     """Render file preview fragment with download and restore actions."""
     esc_content = html.escape(content)
     esc_source = html.escape(source)
     esc_path = html.escape(path)
     filename = html.escape(Path(path).name)
+
+    # Show diff toggle for git and ambiguous sources
+    source_type = detect_source(source)
+    toggle = ""
+    if source_type in ("git", "ambiguous"):
+        toggle = _diff_toggle_buttons(source, path, active="file")
+
     return (
         f"<h3>{esc_path}</h3>"
         f'<div class="breadcrumb">Source: <code>{esc_source}</code></div>'
-        f"<pre>{esc_content}</pre>"
+        + toggle
+        + f"<pre>{esc_content}</pre>"
         f'<div class="actions">'
         f'<a class="btn" href="/ui/download?source={esc_source}&path={esc_path}">'
         f"Download</a>"
@@ -588,6 +802,8 @@ class RestoreHandler(HealthHandler):
                 self._handle_commit(params)
             elif path == "/ui/preview":
                 self._handle_preview(params)
+            elif path == "/ui/diff":
+                self._handle_diff(params)
             elif path == "/ui/download":
                 self._handle_download(params)
             else:
@@ -656,6 +872,19 @@ class RestoreHandler(HealthHandler):
             self._send_html(_render_error(f"File not found: {path}"), code=404)
             return
         self._send_html(_render_preview(content, source, path))
+
+    def _handle_diff(self, params: dict[str, list[str]]) -> None:
+        source = _param(params, "source")
+        path = _param(params, "path")
+        if not source or not path:
+            self._send_html(_render_error("Missing source or path parameter"), code=400)
+            return
+        vault_path = self._get_vault_path()
+        if vault_path is None:
+            self._send_html(_render_error("Health state not initialized"), code=500)
+            return
+        diff_text = git_diff_file(vault_path, source, path)
+        self._send_html(_render_diff(diff_text, source, path))
 
     def _handle_download(self, params: dict[str, list[str]]) -> None:
         source = _param(params, "source")

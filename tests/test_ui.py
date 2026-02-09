@@ -17,9 +17,11 @@ from vault_backup.health import HealthState
 from vault_backup.restore import GitCommit, GitFileChange, ResticEntry, ResticSnapshot
 from vault_backup.ui import (
     RestoreHandler,
+    _diff_toggle_buttons,
     _format_size,
     _format_time,
     _render_commit_files,
+    _render_diff,
     _render_error,
     _render_files,
     _render_log,
@@ -536,3 +538,118 @@ class TestCommitEndpoint:
             status, body, _ = _get(f"{ui_server}/ui/commit?hash=badbeef")
         assert status == 404
         assert "not found" in body
+
+
+# --- Diff rendering ---
+
+
+class TestRenderDiff:
+    def test_highlighted_lines(self) -> None:
+        diff = (
+            "diff --git a/note.md b/note.md\n"
+            "index abc..def 100644\n"
+            "--- a/note.md\n"
+            "+++ b/note.md\n"
+            "@@ -1,3 +1,4 @@\n"
+            " context line\n"
+            "-removed line\n"
+            "+added line\n"
+        )
+        result = _render_diff(diff, "abc123d", "note.md")
+        assert 'class="diff-add"' in result
+        assert 'class="diff-del"' in result
+        assert 'class="diff-hunk"' in result
+        assert 'class="diff-meta"' in result
+
+    def test_html_escaping(self) -> None:
+        diff = "+<script>alert(1)</script>\n"
+        result = _render_diff(diff, "abc123d", "note.md")
+        assert "&lt;script&gt;" in result
+        assert "<script>alert" not in result
+
+    def test_empty_diff(self) -> None:
+        result = _render_diff("", "abc123d", "note.md")
+        assert "No changes" in result
+
+    def test_toggle_buttons_present(self) -> None:
+        diff = "+added line\n"
+        result = _render_diff(diff, "abc123d", "note.md")
+        assert "Show file" in result
+        assert "Show diff" in result
+        assert "/ui/preview" in result
+        assert "/ui/diff" in result
+
+
+class TestDiffToggleButtons:
+    def test_file_active(self) -> None:
+        result = _diff_toggle_buttons("abc123d", "note.md", active="file")
+        assert "Show file" in result
+        assert "Show diff" in result
+
+    def test_diff_active(self) -> None:
+        result = _diff_toggle_buttons("abc123d", "note.md", active="diff")
+        assert "Show file" in result
+        assert "Show diff" in result
+
+
+class TestPreviewDiffToggle:
+    def test_git_source_shows_toggle(self) -> None:
+        result = _render_preview("content", "a" * 40, "note.md")
+        assert "Show diff" in result
+        assert "toggle-group" in result
+
+    def test_ambiguous_source_shows_toggle(self) -> None:
+        result = _render_preview("content", "abcdef12", "note.md")
+        assert "Show diff" in result
+
+    def test_restic_source_no_toggle(self) -> None:
+        result = _render_preview("content", "latest", "/vault/note.md")
+        assert "Show diff" not in result
+        assert "toggle-group" not in result
+
+
+# --- Diff endpoint ---
+
+
+class TestDiffEndpoint:
+    def test_returns_diff(self, ui_server: str) -> None:
+        diff = "+added line\n-removed line\n"
+        with patch("vault_backup.ui.git_diff_file", return_value=diff):
+            status, body, _ = _get(f"{ui_server}/ui/diff?source={'a' * 40}&path=note.md")
+        assert status == 200
+        assert 'class="diff-add"' in body
+        assert 'class="diff-del"' in body
+
+    def test_missing_params(self, ui_server: str) -> None:
+        status, body, _ = _get(f"{ui_server}/ui/diff?source=abc")
+        assert status == 400
+        assert "Missing" in body
+
+    def test_empty_diff(self, ui_server: str) -> None:
+        with patch("vault_backup.ui.git_diff_file", return_value=""):
+            status, body, _ = _get(f"{ui_server}/ui/diff?source={'a' * 40}&path=note.md")
+        assert status == 200
+        assert "No changes" in body
+
+
+# --- Status badge classes ---
+
+
+class TestStatusBadgeClasses:
+    def test_added_has_status_class(self) -> None:
+        commit = GitCommit(hash="a" * 40, short_hash="abc123d", date="2025-01-15T10:30:00+00:00", message="add")
+        changes = [GitFileChange(path="new.md", status="A")]
+        result = _render_commit_files(commit, changes)
+        assert "status-added" in result
+
+    def test_modified_has_status_class(self) -> None:
+        commit = GitCommit(hash="a" * 40, short_hash="abc123d", date="2025-01-15T10:30:00+00:00", message="edit")
+        changes = [GitFileChange(path="note.md", status="M")]
+        result = _render_commit_files(commit, changes)
+        assert "status-modified" in result
+
+    def test_deleted_has_status_class(self) -> None:
+        commit = GitCommit(hash="a" * 40, short_hash="abc123d", date="2025-01-15T10:30:00+00:00", message="rm")
+        changes = [GitFileChange(path="old.md", status="D")]
+        result = _render_commit_files(commit, changes)
+        assert "status-deleted" in result

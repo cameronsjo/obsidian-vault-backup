@@ -14,6 +14,7 @@ from vault_backup.restore import (
     ResticEntry,
     ResticSnapshot,
     detect_source,
+    git_diff_file,
     git_diff_tree,
     git_file_history,
     git_log,
@@ -201,6 +202,47 @@ class TestGitDiffTree:
         mock_subprocess.return_value.returncode = 128
         mock_subprocess.return_value.stdout = ""
         assert git_diff_tree(Path("/vault"), "badbeef") == []
+
+
+class TestGitDiffFile:
+    def test_returns_diff(self, mock_subprocess: MagicMock) -> None:
+        diff_output = (
+            "diff --git a/notes/daily.md b/notes/daily.md\n"
+            "--- a/notes/daily.md\n"
+            "+++ b/notes/daily.md\n"
+            "@@ -1,3 +1,4 @@\n"
+            " # Daily Note\n"
+            "+New line added\n"
+            " Existing content\n"
+        )
+        mock_subprocess.return_value.stdout = diff_output
+        mock_subprocess.return_value.returncode = 0
+        result = git_diff_file(Path("/vault"), "abc123d", "notes/daily.md")
+        assert "diff --git" in result
+        assert "+New line added" in result
+
+    def test_root_commit_fallback(self, mock_subprocess: MagicMock) -> None:
+        # First call (diff commit^..commit) fails, second (diff-tree --root) succeeds
+        fail_result = MagicMock()
+        fail_result.returncode = 128
+        fail_result.stdout = ""
+        success_result = MagicMock()
+        success_result.returncode = 0
+        success_result.stdout = "diff --git a/note.md b/note.md\n+initial content\n"
+        mock_subprocess.side_effect = [fail_result, success_result]
+        result = git_diff_file(Path("/vault"), "abc123d", "note.md")
+        assert "+initial content" in result
+        assert mock_subprocess.call_count == 2
+        # Second call should use diff-tree --root
+        fallback_cmd = mock_subprocess.call_args_list[1][0][0]
+        assert "diff-tree" in fallback_cmd
+        assert "--root" in fallback_cmd
+
+    def test_empty_diff(self, mock_subprocess: MagicMock) -> None:
+        mock_subprocess.return_value.stdout = ""
+        mock_subprocess.return_value.returncode = 0
+        result = git_diff_file(Path("/vault"), "abc123d", "unchanged.md")
+        assert result == ""
 
 
 # --- Restic operations ---

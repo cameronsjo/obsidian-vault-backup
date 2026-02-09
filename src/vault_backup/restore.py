@@ -169,6 +169,31 @@ def git_diff_tree(vault_path: Path, commit: str) -> list[GitFileChange]:
     return changes
 
 
+def git_diff_file(vault_path: Path, commit: str, filepath: str) -> str:
+    """Return the unified diff for a single file in a commit.
+
+    Uses ``git diff commit^..commit -- filepath``. Falls back to
+    ``git diff-tree -p --root`` for root commits (no parent).
+    """
+    log.debug(
+        "Getting file diff at commit",
+        extra={"commit": commit, "filepath": filepath},
+    )
+    result = run_cmd(
+        ["git", "diff", f"{commit}^..{commit}", "--", filepath],
+        cwd=vault_path,
+        check=False,
+    )
+    if result.returncode != 0:
+        # Root commit has no parent — fall back to diff-tree
+        result = run_cmd(
+            ["git", "diff-tree", "-p", "--root", commit, "--", filepath],
+            cwd=vault_path,
+            check=False,
+        )
+    return result.stdout
+
+
 # --- Restic operations ---
 
 
