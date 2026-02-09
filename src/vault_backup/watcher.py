@@ -46,6 +46,7 @@ class DebouncedHandler(FileSystemEventHandler):
         self._timer: threading.Timer | None = None
         self._lock = threading.Lock()
         self._pending = False
+        self._event_count: int = 0
 
         log.debug(
             "DebouncedHandler initialized",
@@ -82,11 +83,16 @@ class DebouncedHandler(FileSystemEventHandler):
             self._last_event_time = time.time()
             was_pending = self._pending
             self._pending = True
+            self._event_count += 1
 
-            # Only write state files on first event in a batch (not every event)
+            # Only write state files and log on first event in a batch
             if not was_pending:
                 (self.state_dir / "last_change").write_text(str(int(self._last_event_time)))
                 (self.state_dir / "pending_changes").write_text("true")
+                log.info(
+                    "Change detected, backup scheduled in %d seconds",
+                    self.debounce_seconds,
+                )
 
             # Cancel existing timer
             if self._timer:
@@ -96,21 +102,18 @@ class DebouncedHandler(FileSystemEventHandler):
             self._timer = threading.Timer(self.debounce_seconds, self._trigger_backup)
             self._timer.start()
 
-            log.info(
-                "Change detected, backup scheduled in %d seconds",
-                self.debounce_seconds,
-            )
-
     def _trigger_backup(self) -> None:
         """Trigger the backup callback."""
         with self._lock:
             if not self._pending:
                 return
 
+            event_count = self._event_count
             self._pending = False
+            self._event_count = 0
             (self.state_dir / "pending_changes").write_text("false")
 
-        log.info("Debounce period elapsed, triggering backup")
+        log.info("Debounce period elapsed, triggering backup (%d events)", event_count)
         try:
             self.on_changes()
             log.info("Backup callback completed")
