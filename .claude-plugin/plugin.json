@@ -1,0 +1,7 @@
+{
+  "name": "obsidi-backup",
+  "description": "Vault backup sidecar with AI commit messages and restic cloud storage",
+  "author": {
+    "name": "cameronsjo"
+  }
+}

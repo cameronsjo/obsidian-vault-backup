@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "obsidi-backup",
+  "owner": {
+    "name": "Cameron Sjo",
+    "github": "cameronsjo"
+  },
+  "plugins": [
+    {
+      "name": "obsidi-backup",
+      "source": "./.claude-plugin",
+      "description": "Vault backup sidecar with AI commit messages and restic cloud storage"
+    }
+  ]
+}
